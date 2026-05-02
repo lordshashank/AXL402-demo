@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AXL × x402 — Pay-Gated P2P Agent Network</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Inter, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .glow { box-shadow: 0 0 30px rgba(168, 85, 247, 0.15); }
+  .pulse { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  .scroll-tail { scrollbar-width: thin; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+<div x-data="app()" x-init="init()" class="max-w-7xl mx-auto p-6">
+
+  <!-- Header -->
+  <header class="flex items-baseline justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold">AXL × x402</h1>
+      <p class="text-zinc-400 text-sm">Pay-gated peer-to-peer agent network · Base Sepolia</p>
+    </div>
+    <div class="text-right text-sm">
+      <div>caller pubkey: <span class="mono text-purple-300" x-text="short(state.caller?.pubkey)"></span></div>
+      <div>gated pubkey: <span class="mono text-emerald-300" x-text="short(state.gated?.pubkey)"></span></div>
+      <div class="text-zinc-500">wallet: <span class="mono" :class="state.wallet?.ready ? 'text-emerald-400' : 'text-rose-400'" x-text="state.wallet?.ready ? 'ready' : 'unconfigured'"></span></div>
+    </div>
+  </header>
+
+  <!-- Top: Live Price + Nodes -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+    <!-- Price chart, takes 2/3 -->
+    <div class="lg:col-span-2 bg-zinc-900/70 ring-1 ring-zinc-800 rounded-2xl p-5 glow">
+      <div class="flex items-baseline justify-between mb-3">
+        <div>
+          <div class="text-xs uppercase tracking-wider text-zinc-500">live price · USDC (atomic)</div>
+          <div class="flex items-baseline gap-3">
+            <div class="text-4xl font-bold mono"
+                 :class="price.surge_factor > 5 ? 'text-rose-400' : price.surge_factor > 2 ? 'text-amber-300' : 'text-emerald-300'"
+                 x-text="(price.current_price ?? '—')"></div>
+            <div class="text-sm text-zinc-400">
+              base <span class="mono" x-text="price.base_price ?? '—'"></span>
+              · surge <span class="mono"
+                :class="price.surge_factor > 5 ? 'text-rose-400' : price.surge_factor > 2 ? 'text-amber-300' : 'text-emerald-400'"
+                x-text="(price.surge_factor ?? 1).toFixed(2) + 'x'"></span>
+            </div>
+          </div>
+        </div>
+        <div class="text-right text-xs text-zinc-400">
+          <div>mode: <span class="font-semibold uppercase mono"
+            :class="price.mode === 'surge' ? 'text-amber-300' : 'text-sky-300'"
+            x-text="price.mode ?? '—'"></span></div>
+          <div>inflight <span class="mono" x-text="price.inflight ?? 0"></span> · rate <span class="mono" x-text="(price.recent_paid_rate ?? 0).toFixed(2)"></span>/s</div>
+        </div>
+      </div>
+      <canvas id="priceChart" height="120"></canvas>
+    </div>
+
+    <!-- Network/Wallet panel -->
+    <div class="bg-zinc-900/70 ring-1 ring-zinc-800 rounded-2xl p-5 space-y-3">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-zinc-500">caller node</div>
+        <div class="mono text-xs text-zinc-300 break-all" x-text="state.caller?.pubkey ?? '—'"></div>
+        <div class="text-xs text-zinc-500">peers: <span class="mono" x-text="state.caller?.peers ?? '—'"></span></div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-zinc-500">gated node</div>
+        <div class="mono text-xs text-emerald-300 break-all" x-text="state.gated?.pubkey ?? '—'"></div>
+        <div class="text-xs text-zinc-500">peers: <span class="mono" x-text="state.gated?.peers ?? '—'"></span></div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-zinc-500">payer wallet</div>
+        <div class="text-sm" :class="state.wallet?.ready ? 'text-emerald-300' : 'text-rose-300'"
+          x-text="state.wallet?.ready ? '● PRIVATE_KEY loaded · signer ready' : '○ PRIVATE_KEY not set'"></div>
+        <div class="text-xs text-zinc-500">never displayed, used only to sign EIP-3009 in-memory</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Actions -->
+  <section class="bg-zinc-900/70 ring-1 ring-zinc-800 rounded-2xl p-5 mb-4">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="text-sm uppercase tracking-wider text-zinc-400">actions</h2>
+      <div class="text-xs text-zinc-500">click any button — every call is real, every pay is on-chain</div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button @click="call('stock_mcp')"  :disabled="busy"
+        class="px-4 py-2 rounded-lg bg-sky-500/15 text-sky-200 ring-1 ring-sky-500/40 hover:bg-sky-500/25 disabled:opacity-50">stock MCP probe</button>
+      <button @click="call('x402_native')" :disabled="busy"
+        class="px-4 py-2 rounded-lg bg-purple-500/15 text-purple-200 ring-1 ring-purple-500/40 hover:bg-purple-500/25 disabled:opacity-50">x402 envelope (no pay)</button>
+      <button @click="call('x402_pay')"   :disabled="busy"
+        class="px-4 py-2 rounded-lg bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50 font-semibold">pay & call ▸</button>
+    </div>
+    <div class="mt-4 text-sm">
+      <template x-if="lastCall">
+        <div class="bg-zinc-950 ring-1 ring-zinc-800 rounded-lg p-3">
+          <div class="text-xs text-zinc-500 mb-1">
+            <span x-text="lastCall.shape"></span>
+            · <span x-text="lastCall.elapsed_s.toFixed(2) + 's'"></span>
+          </div>
+          <template x-if="lastCallTxHash">
+            <div class="text-emerald-300 mb-1">
+              ✓ on-chain settled
+              <a :href="'https://sepolia.basescan.org/tx/' + lastCallTxHash"
+                 target="_blank" class="underline mono"
+                 x-text="lastCallTxHash"></a>
+            </div>
+          </template>
+          <pre class="text-xs text-zinc-300 whitespace-pre-wrap break-all mono max-h-48 overflow-y-auto" x-text="JSON.stringify(lastCall.response, null, 2)"></pre>
+        </div>
+      </template>
+      <template x-if="!lastCall">
+        <div class="text-zinc-500 text-xs">no calls yet</div>
+      </template>
+    </div>
+  </section>
+
+  <!-- Attack Simulator + Event Log -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Attack -->
+    <div class="lg:col-span-2 bg-zinc-900/70 ring-1 ring-zinc-800 rounded-2xl p-5">
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="text-sm uppercase tracking-wider text-zinc-400">attack simulator</h2>
+        <div class="text-xs text-zinc-500">fires N concurrent paid calls — watch the surge curve respond</div>
+      </div>
+      <div class="flex items-center gap-3 mb-3">
+        <input type="range" min="1" max="40" x-model.number="attackN" class="flex-1 accent-rose-500" />
+        <div class="mono w-12 text-center text-rose-300 text-lg" x-text="attackN"></div>
+        <button @click="launchAttack()" :disabled="attacking"
+          class="px-4 py-2 rounded-lg bg-rose-600/20 text-rose-200 ring-1 ring-rose-500/50 hover:bg-rose-600/30 disabled:opacity-50 font-semibold">
+          <span x-show="!attacking">launch attack ⚡</span>
+          <span x-show="attacking" class="pulse">attacking…</span>
+        </button>
+      </div>
+      <template x-if="lastAttack">
+        <div class="text-xs text-zinc-300 grid grid-cols-3 gap-3">
+          <div>
+            <div class="text-zinc-500 uppercase tracking-wider">paid</div>
+            <div class="mono text-emerald-300 text-lg" x-text="lastAttack.results.filter(r=>r.ok).length + '/' + lastAttack.results.length"></div>
+          </div>
+          <div>
+            <div class="text-zinc-500 uppercase tracking-wider">total spent</div>
+            <div class="mono text-rose-300 text-lg" x-text="lastAttack.total_atomic + ' atomic'"></div>
+          </div>
+          <div>
+            <div class="text-zinc-500 uppercase tracking-wider">peak price</div>
+            <div class="mono text-amber-300 text-lg" x-text="peakAttackPrice(lastAttack)"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Event log -->
+    <div class="bg-zinc-900/70 ring-1 ring-zinc-800 rounded-2xl p-5 flex flex-col" style="max-height: 420px;">
+      <h2 class="text-sm uppercase tracking-wider text-zinc-400 mb-2">event log</h2>
+      <div class="space-y-1 overflow-y-auto scroll-tail flex-1 mono text-xs" id="logBox">
+        <template x-for="ev in events.slice().reverse()" :key="ev.ts + ev.msg">
+          <div class="flex gap-2">
+            <span class="text-zinc-500 shrink-0" x-text="hms(ev.ts)"></span>
+            <span x-text="ev.msg"
+              :class="{
+                'text-amber-300': ev.kind === '402',
+                'text-purple-300': ev.kind === 'sign' || ev.kind === 'settle',
+                'text-emerald-300': ev.kind === 'paid' || ev.kind === 'ok',
+                'text-rose-300': ev.kind === 'error',
+                'text-sky-300': ev.kind === 'probe',
+                'text-rose-400 font-semibold': ev.kind === 'attack' || ev.kind === 'attack_done',
+              }"></span>
+          </div>
+        </template>
+        <template x-if="events.length === 0">
+          <div class="text-zinc-600">waiting for events…</div>
+        </template>
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-6 text-center text-xs text-zinc-600">
+    AXL fork with x402 payment-gating · all calls real · all settlements on-chain · <a class="underline" target="_blank" href="https://sepolia.basescan.org/">Base Sepolia</a>
+  </footer>
+</div>
+
+<script>
+function app() {
+  return {
+    state: { caller: null, gated: null, wallet: null },
+    price: { current_price: '—', base_price: '—', mode: '—', surge_factor: 1, inflight: 0, recent_paid_rate: 0 },
+    priceHistory: [],
+    chart: null,
+    events: [],
+    lastCall: null,
+    busy: false,
+    attackN: 10,
+    attacking: false,
+    lastAttack: null,
+
+    init() {
+      this.refreshState();
+      setInterval(() => this.refreshState(), 5000);
+      this.startPricePoll();
+      this.startEventStream();
+      this.initChart();
+    },
+
+    short(s) { return s ? (s.slice(0, 8) + '…' + s.slice(-4)) : '—'; },
+    hms(ts) {
+      const d = new Date(ts * 1000);
+      return d.toTimeString().slice(0, 8);
+    },
+
+    async refreshState() {
+      try {
+        const r = await fetch('/api/state');
+        this.state = await r.json();
+      } catch (e) { /* ignore transient */ }
+    },
+
+    async startPricePoll() {
+      while (true) {
+        try {
+          const r = await fetch('/api/price');
+          if (r.ok) {
+            const p = await r.json();
+            this.price = p;
+            const now = Date.now();
+            this.priceHistory.push({ t: now, v: parseInt(p.current_price || '0', 10) });
+            // 60s window
+            const cutoff = now - 60_000;
+            this.priceHistory = this.priceHistory.filter(x => x.t > cutoff);
+            this.updateChart();
+          }
+        } catch (e) { /* ignore */ }
+        await new Promise(r => setTimeout(r, 500));
+      }
+    },
+
+    startEventStream() {
+      const es = new EventSource('/api/events');
+      es.onmessage = (e) => {
+        const ev = JSON.parse(e.data);
+        this.events.push(ev);
+        if (this.events.length > 200) this.events = this.events.slice(-200);
+      };
+    },
+
+    initChart() {
+      const ctx = document.getElementById('priceChart').getContext('2d');
+      this.chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets: [{
+          data: [], borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.12)',
+          borderWidth: 2, fill: true, pointRadius: 0, tension: 0.3,
+        }] },
+        options: {
+          animation: false, responsive: true, maintainAspectRatio: false,
+          parsing: false, normalized: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { type: 'linear', display: false },
+            y: { ticks: { color: '#71717a', font: { family: 'monospace' } },
+                 grid: { color: 'rgba(63,63,70,0.4)' }, beginAtZero: false },
+          },
+        },
+      });
+    },
+
+    updateChart() {
+      if (!this.chart) return;
+      const data = this.priceHistory.map(x => ({ x: x.t, y: x.v }));
+      this.chart.data.datasets[0].data = data;
+      const surge = (this.price.surge_factor ?? 1);
+      this.chart.data.datasets[0].borderColor =
+        surge > 5 ? '#fb7185' : surge > 2 ? '#fbbf24' : '#34d399';
+      this.chart.data.datasets[0].backgroundColor =
+        surge > 5 ? 'rgba(251,113,133,0.18)' :
+        surge > 2 ? 'rgba(251,191,36,0.15)' : 'rgba(52,211,153,0.12)';
+      this.chart.update('none');
+    },
+
+    get lastCallTxHash() {
+      return this.lastCall?.response?.txHash;
+    },
+
+    async call(mode) {
+      this.busy = true;
+      try {
+        const r = await fetch('/api/call', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, method: 'tools/list', params: {}, service: 'echo' }),
+        });
+        this.lastCall = await r.json();
+      } finally { this.busy = false; }
+    },
+
+    async launchAttack() {
+      this.attacking = true;
+      this.lastAttack = null;
+      try {
+        const r = await fetch('/api/attack', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ n: this.attackN, service: 'echo' }),
+        });
+        this.lastAttack = await r.json();
+      } finally { this.attacking = false; }
+    },
+
+    peakAttackPrice(att) {
+      const prices = att.results.filter(r => r.ok && r.price).map(r => parseInt(r.price, 10));
+      if (!prices.length) return '—';
+      return Math.max(...prices).toString();
+    },
+  };
+}
+</script>
+</body>
+</html>

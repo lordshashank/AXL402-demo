@@ -1,0 +1,24 @@
+{
+  "Peers": [
+    "tls://34.46.48.224:9001",
+    "tls://136.111.135.206:9001"
+  ],
+  "Listen": [],
+  "api_port": 9012,
+  "tcp_port": 7000,
+  "router_addr": "http://127.0.0.1",
+  "router_port": 9103,
+
+  "x402_facilitator_url": "https://x402.org/facilitator",
+  "x402_pay_to": "0x0000000000000000000000000000000000000001",
+  "x402_asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "x402_network": "base-sepolia",
+  "x402_quota_ttl_secs": 600,
+  "x402_quote_ttl_secs": 30,
+
+  "x402_pricing_mode": "surge",
+  "x402_base_amount": "10000",
+  "x402_pricing_curve": "quadratic",
+  "x402_pricing_n": 3,
+  "x402_max_surge": 100
+}
