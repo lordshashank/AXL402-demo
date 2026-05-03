@@ -17,3 +17,4 @@ venv/
 *.log
 private-key.txt
 .env
+configs/_active.json

@@ -1,45 +1,36 @@
 #!/usr/bin/env bash
 # AXL402 demo orchestrator. Starts:
-#   1. fake MCP router (./fake_mcp_router.py)         on :9103
-#   2. caller AXL node (ungated)                       on :9002 (configs/node-A.json)
-#   3. gated AXL node (surge mode)                     on :9012 (configs/node-B-surge.json)
-#   4. FastAPI dashboard (./server.py)                 on :8080
+#   1. fake MCP router (./fake_mcp_router.py) on :9103
+#   2. caller AXL node (ungated, configs/node-A.json) on :9002
+#   3. FastAPI dashboard on :8080
 #
-# Sets up a Python venv (./.venv) on first run.
-# Stops everything on Ctrl-C.
+# The dashboard owns the GATED AXL node — it spawns it on startup and can
+# restart it with new pricing params via the UI. So we no longer launch
+# node-B-{fixed,surge}.json from this script.
 #
-# Required:
-#   PRIVATE_KEY           Base Sepolia wallet private key (used to sign EIP-3009)
-#
-# Optional:
-#   AXL402_BINARY         path to the compiled AXL402 `node` binary
-#                         (default: ../axl/node)
-#   AXL402_MODE           "fixed" | "surge"  (default: surge)
-#                         picks configs/node-B-{mode}.json for the gated node
+# Required: PRIVATE_KEY (Base Sepolia wallet, used to sign EIP-3009)
+# Optional: AXL402_BINARY (default: ../axl/node)
 set -u
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 if [[ -z "${PRIVATE_KEY:-}" ]]; then
-  echo "ERROR: PRIVATE_KEY env var must be set (Base Sepolia wallet, used to sign EIP-3009)." >&2
+  echo "ERROR: PRIVATE_KEY env var must be set." >&2
   exit 1
 fi
 
 NODE_BIN="${AXL402_BINARY:-$ROOT/../axl/node}"
 if [[ ! -x "$NODE_BIN" ]]; then
   echo "ERROR: AXL402 binary not found at $NODE_BIN" >&2
-  echo "Set AXL402_BINARY=/path/to/node, or build the AXL402 fork:" >&2
-  echo "    git clone https://github.com/lordshashank/axl    # the AXL402 fork" >&2
-  echo "    cd axl && make build                              # produces ./node" >&2
+  echo "Build the AXL402 fork first: (cd ../axl && make build)" >&2
   exit 1
 fi
+export AXL402_BINARY="$NODE_BIN"
 
-MODE="${AXL402_MODE:-surge}"
-GATED_CONFIG="$ROOT/configs/node-B-${MODE}.json"
 CALLER_CONFIG="$ROOT/configs/node-A.json"
-if [[ ! -f "$GATED_CONFIG" ]]; then
-  echo "ERROR: gated config not found: $GATED_CONFIG" >&2
+if [[ ! -f "$CALLER_CONFIG" ]]; then
+  echo "ERROR: caller config not found: $CALLER_CONFIG" >&2
   exit 1
 fi
 
@@ -58,8 +49,10 @@ cleanup() {
   echo "stopping demo processes…"
   for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null || true; done
   pkill -f "node -config $CALLER_CONFIG" 2>/dev/null || true
-  pkill -f "node -config $GATED_CONFIG"  2>/dev/null || true
   pkill -f "$ROOT/fake_mcp_router.py"    2>/dev/null || true
+  # The dashboard's startup hook started the gated node; its shutdown hook
+  # will stop it cleanly when uvicorn exits. As a fallback:
+  pkill -f "configs/_active.json" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -76,10 +69,5 @@ echo "→ caller AXL on :9002 (ungated)"
 PIDS+=($!)
 until curl -fsS http://127.0.0.1:9002/topology >/dev/null 2>&1; do sleep 1; done
 
-echo "→ gated AXL on :9012 ($MODE mode)"
-"$NODE_BIN" -config "$GATED_CONFIG" > /tmp/axl-B.log 2>&1 &
-PIDS+=($!)
-until curl -fsS http://127.0.0.1:9012/topology >/dev/null 2>&1; do sleep 1; done
-
-echo "→ dashboard at http://127.0.0.1:8080"
+echo "→ dashboard at http://127.0.0.1:8080 (it will start the gated node)"
 exec "$PY" -m uvicorn server:app --host 127.0.0.1 --port 8080
