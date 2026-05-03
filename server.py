@@ -7,7 +7,7 @@ surge parameters without restarting the whole demo. Proxies AXL endpoints
 and exposes:
 
   GET  /api/state         caller + gated pubkeys, peers, wallet ready
-  GET  /api/price         current price snapshot from gated /x402/price
+  GET  /api/price         current price snapshot from gated /axl402/price
   GET  /api/wallet        usdc/eth balance of payer wallet (no address!)
   GET  /api/config        current pricing-mode params for the gated node
   POST /api/config        set new params, restart the gated node
@@ -111,15 +111,15 @@ DEFAULT_GATED_CONFIG: dict[str, Any] = {
     "x402_pay_to": "0xFe643b54727d53C49835f9f6c1a2B9861E741d98",
     "x402_asset":  "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     "x402_network": "base-sepolia",
-    "x402_quota_ttl_secs": 600,
-    "x402_quote_ttl_secs": 30,
+    "axl402_quota_ttl_secs": 600,
+    "axl402_quote_ttl_secs": 30,
 
-    "x402_pricing_mode":  "surge",
+    "axl402_pricing_mode":  "surge",
     "x402_amount":        "10000",
     "x402_base_amount":   "10000",
-    "x402_pricing_curve": "quadratic",
-    "x402_pricing_n":     3,
-    "x402_max_surge":     100,
+    "axl402_pricing_curve": "quadratic",
+    "axl402_pricing_n":     3,
+    "axl402_max_surge":     100,
 }
 
 
@@ -146,7 +146,7 @@ class GatedNode:
             [AXL402_BINARY, "-config", cfg_path],
             stdout=self._log, stderr=self._log,
         )
-        bus.emit("system", f"gated node started (pid {self.proc.pid}) mode={self.config['x402_pricing_mode']}")
+        bus.emit("system", f"gated node started (pid {self.proc.pid}) mode={self.config['axl402_pricing_mode']}")
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:
@@ -313,7 +313,7 @@ async def state() -> dict[str, Any]:
 async def price() -> Any:
     try:
         async with httpx.AsyncClient(timeout=3.0) as c:
-            r = await c.get(f"{GATED_AXL}/x402/price")
+            r = await c.get(f"{GATED_AXL}/axl402/price")
             return JSONResponse(r.json(), status_code=r.status_code)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
@@ -331,14 +331,14 @@ async def wallet_endpoint() -> Any:
 async def get_config() -> dict[str, Any]:
     cfg = gated_node.config
     return {
-        "pricing_mode":   cfg.get("x402_pricing_mode"),
+        "pricing_mode":   cfg.get("axl402_pricing_mode"),
         "amount":         cfg.get("x402_amount"),
         "base_amount":    cfg.get("x402_base_amount"),
-        "pricing_curve":  cfg.get("x402_pricing_curve"),
-        "pricing_n":      cfg.get("x402_pricing_n"),
-        "max_surge":      cfg.get("x402_max_surge"),
-        "quote_ttl_secs": cfg.get("x402_quote_ttl_secs"),
-        "quota_ttl_secs": cfg.get("x402_quota_ttl_secs"),
+        "pricing_curve":  cfg.get("axl402_pricing_curve"),
+        "pricing_n":      cfg.get("axl402_pricing_n"),
+        "max_surge":      cfg.get("axl402_max_surge"),
+        "quote_ttl_secs": cfg.get("axl402_quote_ttl_secs"),
+        "quota_ttl_secs": cfg.get("axl402_quota_ttl_secs"),
         "pay_to":         cfg.get("x402_pay_to"),
         "asset":          cfg.get("x402_asset"),
         "network":        cfg.get("x402_network"),
@@ -360,14 +360,14 @@ class ConfigReq(BaseModel):
 async def post_config(req: ConfigReq) -> dict[str, Any]:
     cfg = gated_node.config
     mapping = {
-        "pricing_mode":   "x402_pricing_mode",
+        "pricing_mode":   "axl402_pricing_mode",
         "amount":         "x402_amount",
         "base_amount":    "x402_base_amount",
-        "pricing_curve":  "x402_pricing_curve",
-        "pricing_n":      "x402_pricing_n",
-        "max_surge":      "x402_max_surge",
-        "quote_ttl_secs": "x402_quote_ttl_secs",
-        "quota_ttl_secs": "x402_quota_ttl_secs",
+        "pricing_curve":  "axl402_pricing_curve",
+        "pricing_n":      "axl402_pricing_n",
+        "max_surge":      "axl402_max_surge",
+        "quote_ttl_secs": "axl402_quote_ttl_secs",
+        "quota_ttl_secs": "axl402_quota_ttl_secs",
     }
     changed = []
     for k, v in req.dict(exclude_unset=True).items():
@@ -417,7 +417,7 @@ async def call(req: CallReq) -> dict[str, Any]:
         return {"shape": "stock_mcp", "response": out, "elapsed_s": time.time() - started}
 
     if req.mode in ("x402_native", "x402_pay"):
-        url = f"{CALLER_AXL}/x402/{peer}"
+        url = f"{CALLER_AXL}/axl402/{peer}"
         envelope = {
             "v": 1,
             "mcp": {
@@ -493,7 +493,7 @@ class SubmitReq(BaseModel):
 @app.post("/api/submit")
 async def submit(req: SubmitReq) -> dict[str, Any]:
     peer = await _gated_pubkey()
-    url = f"{CALLER_AXL}/x402/{peer}"
+    url = f"{CALLER_AXL}/axl402/{peer}"
     envelope: dict[str, Any] = {
         "v": 1,
         "mcp": {
@@ -546,7 +546,7 @@ async def attack(req: AttackReq) -> dict[str, Any]:
     import random
 
     async def one(i: int) -> dict[str, Any]:
-        url = f"{CALLER_AXL}/x402/{peer}"
+        url = f"{CALLER_AXL}/axl402/{peer}"
         envelope_base = {"v": 1, "mcp": {
             "service": req.service,
             "request": {"jsonrpc": "2.0", "id": i,

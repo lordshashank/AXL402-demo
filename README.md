@@ -19,7 +19,7 @@ through Coinbase's hosted [x402 facilitator](https://x402.org/facilitator).
 
 | Panel | What it shows |
 |---|---|
-| **Live price chart** | Polls `/x402/price` at 2 Hz. Sparkline goes amber → rose as surge factor climbs. |
+| **Live price chart** | Polls `/axl402/price` at 2 Hz. Sparkline goes amber → rose as surge factor climbs. |
 | **Network panel** | Both AXL pubkeys, peer counts, wallet status (never the address). |
 | **Action buttons** | One click per scenario: stock MCP probe, x402 envelope (no pay), or full pay-and-call with on-chain settlement. |
 | **Attack simulator** | Slider 1–40, "launch attack" fires concurrent paid calls. Sparkline spikes, total spent ticks up, peak price displayed. |
@@ -48,7 +48,7 @@ Every settled call links straight to its
                           │ Coinbase x402   │                │
                           │ facilitator     │                ▼ MCP route
                           │ (Base Sepolia)  │      ┌──────────────────┐
-                          └─────────────────┘      │  fake_mcp_router │
+                          └─────────────────┘      │ dummy_mcp_router │
                                                    │  :9103           │
                                                    └──────────────────┘
 ```
@@ -143,7 +143,7 @@ AXL402_MODE=surge ./run.sh    # configs/node-B-surge.json   (default)
 | `server.py` | FastAPI proxy + signer + SSE event bus |
 | `index.html` | Single-page dashboard (Tailwind + Alpine + Chart.js, all CDN, no build) |
 | `x402_signer.py` | EIP-3009 typed-data signer; reads `PRIVATE_KEY`, never logs it |
-| `fake_mcp_router.py` | Minimal stand-in for an MCP router so the gated node has something to dispatch to |
+| `dummy_mcp_router.py` | Minimal stand-in for an MCP router so the gated node has something to dispatch to |
 | `run.sh` | Orchestrator: starts router + nodes + dashboard, tears down on exit |
 | `requirements.txt` | Python deps |
 | `configs/node-A.json` | Caller AXL config (ungated) |
@@ -164,7 +164,7 @@ or "unconfigured" — it does not display the derived address either.
 ## Related
 
 - **AXL402 fork (Go):** the actual gate-stream implementation —
-  `internal/x402/` plus the listener/main wiring. Repo:
+  `internal/axl402/` plus the listener/main wiring. Repo:
   <https://github.com/lordshashank/axl>.
 - **Upstream AXL:** <https://github.com/gensyn-ai/axl>.
 - **x402 spec:** <https://www.x402.org/>, <https://github.com/coinbase/x402>.
