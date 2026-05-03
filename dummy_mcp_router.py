@@ -1,4 +1,4 @@
-"""Fake MCP router for local testing.
+"""Dummy MCP router for local testing.
 
 Implements the /route endpoint AXL forwards inbound MCP envelopes to.
 Returns a hardcoded JSON-RPC tools/list response so we can see the full

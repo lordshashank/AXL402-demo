@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AXL402 demo orchestrator. Starts:
-#   1. fake MCP router (./fake_mcp_router.py) on :9103
+#   1. dummy MCP router (./dummy_mcp_router.py) on :9103
 #   2. caller AXL node (ungated, configs/node-A.json) on :9002
 #   3. FastAPI dashboard on :8080
 #
@@ -49,15 +49,15 @@ cleanup() {
   echo "stopping demo processes…"
   for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null || true; done
   pkill -f "node -config $CALLER_CONFIG" 2>/dev/null || true
-  pkill -f "$ROOT/fake_mcp_router.py"    2>/dev/null || true
+  pkill -f "$ROOT/dummy_mcp_router.py"    2>/dev/null || true
   # The dashboard's startup hook started the gated node; its shutdown hook
   # will stop it cleanly when uvicorn exits. As a fallback:
   pkill -f "configs/_active.json" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-echo "→ fake MCP router on :9103"
-"$PY" "$ROOT/fake_mcp_router.py" > /tmp/router.log 2>&1 &
+echo "→ dummy MCP router on :9103"
+"$PY" "$ROOT/dummy_mcp_router.py" > /tmp/router.log 2>&1 &
 PIDS+=($!)
 until curl -fsS -X POST http://127.0.0.1:9103/route \
       -H "Content-Type: application/json" \
