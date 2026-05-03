@@ -10,7 +10,7 @@
   "router_port": 9103,
 
   "x402_facilitator_url": "https://x402.org/facilitator",
-  "x402_pay_to": "0x0000000000000000000000000000000000000001",
+  "x402_pay_to": "0xFe643b54727d53C49835f9f6c1a2B9861E741d98",
   "x402_asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   "x402_network": "base-sepolia",
   "x402_quota_ttl_secs": 600,
